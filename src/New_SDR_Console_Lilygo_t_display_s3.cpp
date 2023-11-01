@@ -34,13 +34,13 @@ int memo1 = back;
 int memo2 = LED_Blue;
 int memo3 = LED_Red;
 int squelch = 0;
-int Step = 0;
+int Step = 1;
 bool invert=false;
 int bright=6;
 int brightnesses[10]={35,70,105,140,175,210,250};
 int pot=0;  // Needs to be reviewd
 int newPos = 0;     // Used by the Step rotary Encoder
-static int pos = 0; // Used by the Step rotary Encoder
+static int pos = 1; // Used by the Step rotary Encoder
 
 RotaryEncoder *encoder = nullptr; // A pointer to the dynamic created Step Rotary Encoder instance.
 String Frequency= "";
@@ -113,13 +113,28 @@ void draw()
   sprite.drawString(Squelch_,170,6);
   sprite.drawString(Volume_,170,26);
   sprite.drawString("STEP ",35,6);
+
     //sprite.drawCircle(13,10,8, Black);  //, Black);
-    sprite.fillCircle(13,10,8, Black);  //, Black);
+    sprite.fillCircle(68,61,8, Black);  //, Black);
     //sprite.fillCircle(13,10,5, TFT_RED);  //, Black);
-    sprite.fillCircle(13,10,5, memo1);  //, Black);
+    sprite.fillCircle(68,61,5, memo1);  //, Black);
+        //sprite.drawCircle(13,10,8, Black);  //, Black);
+    sprite.fillCircle(160,61,8, Black);  //, Black);
+    //sprite.fillCircle(13,10,5, TFT_RED);  //, Black);
+    sprite.fillCircle(160,61,5, memo1);  //, Black);
+    //sprite.drawCircle(13,10,8, Black);  //, Black);
+    sprite.fillCircle(251,61,8, Black);  //, Black);
+    //sprite.fillCircle(13,10,5, TFT_RED);  //, Black);
+    sprite.fillCircle(251,61,5, memo1);  //, Black);
+
   sprite.setTextColor(Black,back);
-  sprite.drawString("KHz",35,26);
+
+  sprite.drawString("Mem1",6,55);
+  sprite.drawString("Mem2",95,55);
+  sprite.drawString("Mem3",185,55);
+
   sprite.drawString("KHz",280,53);
+  sprite.drawString("KHz",35,26);
   sprite.fillRect(30,46,134,4,TFT_MAROON); //Step Box Botton Line
   sprite.fillRect(30,1,4,46,TFT_MAROON);   //Step Box Left Line
   sprite.fillRect(30,1,130,4,TFT_MAROON);  //Step Box Top Line
@@ -251,9 +266,9 @@ void step(){
   if (pos != newPos) {
     Squelch_ = "";
     Volume_ = " VOL  ";
-    if (newPos < 0 ) {
-      newPos = 0;
-      encoder->setPosition(0);
+    if (newPos <= 0 ) {
+      newPos = 1;
+      encoder->setPosition(1);
     }
     if (newPos >= 100 ) {
       newPos = 100;
