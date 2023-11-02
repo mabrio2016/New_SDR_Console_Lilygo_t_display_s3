@@ -26,13 +26,17 @@ TFT_eSprite sprite = TFT_eSprite(&tft);
 
 #define PIN_CLK GPIO_NUM_2 // Used for the Step Rotary Encoder
 #define PIN_DT GPIO_NUM_3  // Used for the Step Rotary Encoder
-#define PIN_INPUT GPIO_NUM_10 // Used for the Step Rotary Encoder Switch
-OneButton button(PIN_INPUT, true); // Used for the Step Rotary Encoder Switch
-unsigned long pressStartTime; // Used for the Step Rotary Encoder Switch - Save the millis when a press has started.
+#define PIN_INPUT1 GPIO_NUM_10 // Used for the Step Rotary Encoder Switch
+OneButton button1(PIN_INPUT1, true); // Used for the Step Rotary Encoder Switch
+
+#define PIN_INPUT2 GPIO_NUM_11 // Used for the Memo1 Button 
+OneButton button2(PIN_INPUT2, true); // Used for the Memo1 Button
+#define PIN_INPUT3 GPIO_NUM_12 // Used for the Memo1 Button 
+OneButton button3(PIN_INPUT3, true); // Used for the Memo1 Button 
 
 int memo1 = back;
-int memo2 = LED_Blue;
-int memo3 = LED_Red;
+int memo2 = back;
+int memo3 = back;
 int squelch = 0;
 int Step = 1;
 bool invert=false;
@@ -76,26 +80,21 @@ char *ultoa(uint64_t val, char *s);
 IRAM_ATTR void checkPosition();
 void step();
 void frequency();
-void IRAM_ATTR checkTicks();
-void singleClick();
-void doubleClick();
-void pressStart();
-void pressStop();
-
-void setup() 
-{  
-  analogReadResolution(12);
-  tft.init();
-  tft.setRotation(1);
-  sprite.createSprite(320,170);
-  sprite.setTextColor(Black,back);
-  sprite.setFreeFont(&Freqfont);
-  ledcSetup(0, 10000, 2);
-  ledcAttachPin(38, 0);
-  ledcWrite(0, brightnesses[bright]);  //brightnes of screen
-  initGpio();
-  initComm();
-}
+void IRAM_ATTR checkTicks1();
+void singleClick1();
+void doubleClick1();
+void pressStart1();
+void pressStop1();
+void IRAM_ATTR checkTicks2();
+void singleClick2();
+void doubleClick2();
+void pressStart2();
+void pressStop2();
+void IRAM_ATTR checkTicks3();
+void singleClick3();
+void doubleClick3();
+void pressStart3();
+void pressStop3();
 
 void draw()
 {
@@ -121,11 +120,11 @@ void draw()
         //sprite.drawCircle(13,10,8, Black);  //, Black);
     sprite.fillCircle(160,61,8, Black);  //, Black);
     //sprite.fillCircle(13,10,5, TFT_RED);  //, Black);
-    sprite.fillCircle(160,61,5, memo1);  //, Black);
+    sprite.fillCircle(160,61,5, memo2);  //, Black);
     //sprite.drawCircle(13,10,8, Black);  //, Black);
     sprite.fillCircle(251,61,8, Black);  //, Black);
     //sprite.fillCircle(13,10,5, TFT_RED);  //, Black);
-    sprite.fillCircle(251,61,5, memo1);  //, Black);
+    sprite.fillCircle(251,61,5, memo3);  //, Black);
 
   sprite.setTextColor(Black,back);
 
@@ -194,16 +193,32 @@ void initGpio()
   attachInterrupt(P1, ai0, RISING); 
   // Used for the Step Rotary Encoder
   encoder = new RotaryEncoder(PIN_CLK, PIN_DT, RotaryEncoder::LatchMode::TWO03);
-  // Used for the Step Rotary Encoder Pins CLK, DT and Switch
-  attachInterrupt(digitalPinToInterrupt(PIN_CLK), checkPosition, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(PIN_DT), checkPosition, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(PIN_INPUT), checkTicks, CHANGE);
+  
+  attachInterrupt(digitalPinToInterrupt(PIN_CLK), checkPosition, CHANGE); // Used for the Step Rotary Encoder Pins CLK
+  attachInterrupt(digitalPinToInterrupt(PIN_DT), checkPosition, CHANGE);  // Used for the Step Rotary Encoder Pins DT
+  attachInterrupt(digitalPinToInterrupt(PIN_INPUT1), checkTicks1, CHANGE);  // Used for the Step Rotary Encoder Switch
+  attachInterrupt(digitalPinToInterrupt(PIN_INPUT2), checkTicks2, CHANGE); // Used detect the Memo2 button
+  attachInterrupt(digitalPinToInterrupt(PIN_INPUT3), checkTicks3, CHANGE); // Used detect the Memo2 button
   // Used detect the Step Rotary Switch clicks
-  button.attachClick(singleClick);
-  button.attachDoubleClick(doubleClick);
-  button.setPressMs(1000); // that is the time when LongPressStart is called
-  button.attachLongPressStart(pressStart);
-  button.attachLongPressStop(pressStop);
+  button1.attachClick(singleClick1);
+  button1.attachDoubleClick(doubleClick1);
+  button1.setPressMs(1000); // that is the time when LongPressStart is called
+  button1.attachLongPressStart(pressStart1);
+  button1.attachLongPressStop(pressStop1);
+
+  // Used detect the Memo2 button
+  button2.attachClick(singleClick2);
+  button2.attachDoubleClick(doubleClick2);
+  button2.setPressMs(1000); // that is the time when LongPressStart is called
+  button2.attachLongPressStart(pressStart2);
+  button2.attachLongPressStop(pressStop2);
+
+  // Used detect the Memo3 button
+  button3.attachClick(singleClick3);
+  button3.attachDoubleClick(doubleClick3);
+  button3.setPressMs(1000); // that is the time when LongPressStart is called
+  button3.attachLongPressStart(pressStart3);
+  button3.attachLongPressStop(pressStop3);
 }
 
 void initComm()
@@ -261,7 +276,6 @@ char *ultoa(uint64_t val, char *s)
 }
 
 void step(){
-  //pos = 0;
   newPos = encoder->getPosition();
   if (pos != newPos) {
     Squelch_ = "";
@@ -284,32 +298,83 @@ void frequency(){
   Frequency = Freq_Hz;  
 }
 
-void IRAM_ATTR checkTicks() {
-  // include all buttons here to be checked
-  button.tick(); // just call tick() to check the state.
+void IRAM_ATTR checkTicks1() {
+  button1.tick(); // just call tick() to check the state.
 }
 
-void singleClick() {
-  //Serial.println("singleClick() detected.");
+void singleClick1() {
   memo1 = LED_Red;
-} // singleClick
+}
 
-void doubleClick() {
-  Serial.println("doubleClick() detected.");
-} // doubleClick
+void doubleClick1() {
+  //Serial.println("doubleClick1() detected.");
+}
 
-void pressStart() { // this function will be called when the button was held down for 1 second or more.
-  //Serial.println("pressStart()");
-  pressStartTime = millis() - 1000; // as set in setPressMs()
+void pressStart1() { // this function will be called when the button1 was held down for 1 second or more.
   memo1 = back;
-} // pressStart()
+}
 
-void pressStop() {  // this function will be called when the button was released after a long hold.
-  //Serial.print("pressStop(");
-  //Serial.print(millis() - pressStartTime);
-  //Serial.println(") detected.");
+void pressStop1() {  // this function will be called when the button1 was released after a long hold.
   memo1 = LED_Blue;
-} // pressStop()
+} 
+
+void IRAM_ATTR checkTicks2() {
+  button2.tick(); // just call tick() to check the state.
+}
+
+void singleClick2() {
+  memo2 = LED_Red;
+  //Serial.println("Singlelick1() detected.");
+}
+
+void doubleClick2() {
+  //Serial.println("doubleClick1() detected.");
+}
+
+void pressStart2() { // this function will be called when the button1 was held down for 1 second or more.
+  memo2 = back;
+}
+
+void pressStop2() {  // this function will be called when the button1 was released after a long hold.
+  memo2 = LED_Blue;
+} 
+
+void IRAM_ATTR checkTicks3() {
+  button3.tick(); // just call tick() to check the state.
+}
+
+void singleClick3() {
+  memo3 = LED_Red;
+  //Serial.println("Singlelick1() detected.");
+}
+
+void doubleClick3() {
+  //Serial.println("doubleClick1() detected.");
+}
+
+void pressStart3() { // this function will be called when the button1 was held down for 1 second or more.
+  memo3 = back;
+}
+
+void pressStop3() {  // this function will be called when the button1 was released after a long hold.
+  memo3 = LED_Blue;
+} 
+
+
+void setup() 
+{  
+  analogReadResolution(12);
+  tft.init();
+  tft.setRotation(1);
+  sprite.createSprite(320,170);
+  sprite.setTextColor(Black,back);
+  sprite.setFreeFont(&Freqfont);
+  ledcSetup(0, 10000, 2);
+  ledcAttachPin(38, 0);
+  ledcWrite(0, brightnesses[bright]);  //brightnes of screen
+  initGpio();
+  initComm();
+}
 
 void loop() 
 {
@@ -317,6 +382,8 @@ void loop()
   step();
   frequency();
   draw();
-  button.tick();
+  button1.tick();
+  button2.tick();
+  button3.tick();
   //encoder->tick(); // Check the Step Encoder.
 }
