@@ -13,9 +13,10 @@ TFT_eSprite sprite = TFT_eSprite(&tft);
 #define back 0x9D91
 // #define bigFont DSEG7_Modern_Bold_64
 // #define Freqfont DSEG7_Modern_Bold_Italic_45
-#define Freqfont DSEG7_Modern_Bold_45
+#define Freqfont DSEG14_Classic_Bold_37 //DSEG14_Classic_Bold_36 //DSEG14_Classic_Regular_35 //DSEG7_Modern_Italic_40 //DSEG7_Modern_Bold_45
 #define small DejaVu_Sans_Mono_Bold_12
 #define middle Monospaced_bold_18
+#define middle1 Monospaced_bold_24 //Monospaced_bold_21
 #define middle2 DSEG7_Classic_Bold_30
 #define clockFont DSEG7_Modern_Bold_20
 #define dc Cousine_Regular_38
@@ -23,6 +24,7 @@ TFT_eSprite sprite = TFT_eSprite(&tft);
 #define back 0x9D91
 #define color2 0x18E3
 #define Black TFT_BLACK
+#define Dark_Blue TFT_NAVY
 #define LED_Blue TFT_BLUE
 #define LED_Red TFT_RED
 
@@ -61,12 +63,11 @@ ICACHE_RAM_ATTR void ai0(); // Encoder Pin A //interupt rotine
 // ICACHE_RAM_ATTR void ai1(); //Encoder Pin B //interupt rotine
 ICACHE_RAM_ATTR void Ask_Switch_Check(); // Ask frequence switch interupt rotine
 
-volatile int TempAnalog_Value, Analog_Value = 0; // These variable will hold the Analog Squelch values;
-volatile int Analog_Reading, Filtered_Analog_Reading = 0;
+volatile int Analog_Reading, Filtered_Analog_Reading, TempAnalog_Value= 0; // Used for the annalog input Squelch potentiometer
 volatile float average_Analog_Reading = 0; // Used for the annalog input Squelch potentiometer
-volatile long TempCounter, readFrequency, toSendFrequency, Current_Frequncy = 0;
 uint64_t counter = 0;
 volatile bool LockEncoder = false;
+volatile bool Asked = true;
 
 const int P1 = GPIO_NUM_16; //  GPIO16 -> Frequncy Rotary Encoder A
 const int P2 = GPIO_NUM_21; //  GPIO21 -> Frequncy Rotary Encoder B
@@ -108,16 +109,16 @@ void doubleClick3();
 void pressStart3();
 void pressStop3();
 void askForFrequency();
-void Display_Recived();
+void Serial_Flush_TX(String command);
 
 
 void draw()
 {
-  sprite.setTextColor(Black, back);
+  sprite.setTextColor(Dark_Blue, back);
   sprite.fillSprite(back);
   sprite.setFreeFont(&Freqfont);
   sprite.setTextDatum(2);
-  sprite.drawString(Frequency, 316, 75);
+  sprite.drawString(Frequency, 316, 85);
   sprite.setFreeFont(&middle2);
   sprite.drawFloat(squelch, 0, 314, 10);
   sprite.drawFloat(Step, 0, 160, 10);
@@ -147,8 +148,11 @@ void draw()
   sprite.drawString("Mem2", 95, 55);
   sprite.drawString("Mem3", 185, 55);
 
-  sprite.drawString("KHz", 280, 53);
+  sprite.setFreeFont(&middle1);
+  sprite.drawString("Hz", 290, 60);
+  sprite.setFreeFont(&middle);
   sprite.drawString("KHz", 35, 26);
+
   sprite.fillRect(30, 46, 134, 4, TFT_MAROON); // Step Box Botton Line
   sprite.fillRect(30, 1, 4, 46, TFT_MAROON);   // Step Box Left Line
   sprite.fillRect(30, 1, 130, 4, TFT_MAROON);  // Step Box Top Line
@@ -190,15 +194,17 @@ void Squelch()
 {
   Analog_Reading = analogRead(1);
   average_Analog_Reading += 0.08 * (Analog_Reading - average_Analog_Reading); // one pole digital filter, about 20Hz cutoff
-  Filtered_Analog_Reading = (average_Analog_Reading - 200) / 10;              //* 1.2;
+  Filtered_Analog_Reading = (average_Analog_Reading - 200) / 10;
   if (Filtered_Analog_Reading != TempAnalog_Value)
   {
     Squelch_ = "SQLCH ";
     Volume_ = "";
-    Analog_Value = map(Filtered_Analog_Reading, -20, 360, 1, 255);
-    // Serial.printf("Filtered_Analog_Reading = %d\n",Analog_Reading);
-    TempAnalog_Value = Filtered_Analog_Reading;
-    squelch = Analog_Value;
+    squelch = map(Filtered_Analog_Reading, -20, 360, 1, 255);
+    char result[3];
+    sprintf(result, "%03d", squelch);
+    if (Asked == false) {
+      Serial_Flush_TX("SQ0" + String(result) + ";;");
+    }    
   }
 }
 
@@ -346,22 +352,22 @@ void IRAM_ATTR checkTicks()
 
 void singleClick()
 {
-  memo1 = LED_Red;
+  
 }
 
 void doubleClick()
 {
-  // Serial.println("doubleClick1() detected.");
+  askForFrequency();
 }
 
 void pressStart()
-{ // this function will be called when the button1 was held down for 1 second or more.
-  memo1 = back;
+{ 
+  
 }
 
 void pressStop()
-{ // this function will be called when the button1 was released after a long hold.
-  memo1 = LED_Blue;
+{
+
 }
 
 void IRAM_ATTR checkTicks1()
@@ -442,32 +448,27 @@ void pressStop3()
 }
 
 void askForFrequency(){
-  Serial.flush(); // wait until TX buffer is empty
-  delay(20);
-  Serial.println("FA;");
-  delay(20);
-  //asked = true;
+  counter = 0;
+
+  Serial_Flush_TX("FA;");
   LockEncoder = true;
-  // Heltec.display->clear();
-  // Heltec.display->setFont(ArialMT_Plain_24);
-  // Heltec.display->drawString(0,5,"! Connected");
-  // Heltec.display->display(); //Mostra as informacoes no display
+  Asked = true;
   if(Serial.available()){
     String rxresponse = Serial.readStringUntil(';');
-    if (rxresponse.startsWith("FA")){
-      readFrequency = rxresponse.substring(2, 13).toInt();
-      Current_Frequncy = readFrequency;
-      Display_Recived();
-      counter = 0,
-      //asked = false;
+    if (rxresponse.startsWith("FA")) {
+      counter = rxresponse.substring(2, 13).toInt();
       LockEncoder = false;
-    }
+      Asked = false;
+    }      
   }
 }
 
-void Display_Recived(){
-  strcpy(Freq_Hz, ultoa(readFrequency, Received_Freq));
-  Frequency = Freq_Hz;
+void Serial_Flush_TX(String command)
+{
+  Serial.flush(); // wait until TX buffer is empty
+  delay(20);
+  Serial.println(command);
+  delay(20);
 }
 
 void setup()
