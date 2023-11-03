@@ -27,6 +27,7 @@ TFT_eSprite sprite = TFT_eSprite(&tft);
 #define Dark_Blue TFT_NAVY
 #define LED_Blue TFT_BLUE
 #define LED_Red TFT_RED
+#define LED_Yellow TFT_YELLOW
 
 #define PIN_CLK GPIO_NUM_2              // Used for the Step Rotary Encoder
 #define PIN_DT GPIO_NUM_3               // Used for the Step Rotary Encoder
@@ -66,6 +67,7 @@ ICACHE_RAM_ATTR void Ask_Switch_Check(); // Ask frequence switch interupt rotine
 volatile int Analog_Reading, Filtered_Analog_Reading, TempAnalog_Value= 0; // Used for the annalog input Squelch potentiometer
 volatile float average_Analog_Reading = 0; // Used for the annalog input Squelch potentiometer
 uint64_t counter = 0;
+uint64_t last_counter = 0;
 volatile bool LockEncoder = false;
 volatile bool Asked = true;
 
@@ -109,6 +111,7 @@ void doubleClick3();
 void pressStart3();
 void pressStop3();
 void askForFrequency();
+void Sendd_Frequency();
 void Serial_Flush_TX(String command);
 
 
@@ -129,18 +132,12 @@ void draw()
   sprite.drawString(Volume_, 170, 26);
   sprite.drawString("STEP ", 35, 6);
 
-  // sprite.drawCircle(13,10,8, Black);  //, Black);
-  sprite.fillCircle(68, 61, 8, Black); //, Black);
-  // sprite.fillCircle(13,10,5, TFT_RED);  //, Black);
-  sprite.fillCircle(68, 61, 5, memo1);  //, Black);
-                                        // sprite.drawCircle(13,10,8, Black);  //, Black);
-  sprite.fillCircle(160, 61, 8, Black); //, Black);
-  // sprite.fillCircle(13,10,5, TFT_RED);  //, Black);
-  sprite.fillCircle(160, 61, 5, memo2); //, Black);
-  // sprite.drawCircle(13,10,8, Black);  //, Black);
-  sprite.fillCircle(251, 61, 8, Black); //, Black);
-  // sprite.fillCircle(13,10,5, TFT_RED);  //, Black);
-  sprite.fillCircle(251, 61, 5, memo3); //, Black);
+  sprite.fillCircle(68, 61, 8, Black);
+  sprite.fillCircle(68, 61, 5, memo1);
+  sprite.fillCircle(160, 61, 8, Black);
+  sprite.fillCircle(160, 61, 5, memo2);
+  sprite.fillCircle(251, 61, 8, Black);
+  sprite.fillCircle(251, 61, 5, memo3);
 
   sprite.setTextColor(Black, back);
 
@@ -269,7 +266,7 @@ void initComm()
 void ai0()
 { // Interrupt used for the Frequency Rotary Encoder
   if (!LockEncoder)
-  {
+  {    
     if (digitalRead(P2) == LOW)
     {
       if (counter < 1000)
@@ -449,7 +446,6 @@ void pressStop3()
 
 void askForFrequency(){
   counter = 0;
-
   Serial_Flush_TX("FA;");
   LockEncoder = true;
   Asked = true;
@@ -463,6 +459,13 @@ void askForFrequency(){
   }
 }
 
+void Sendd_Frequency(){
+  char result2[11]; 
+  sprintf(result2, "%011d", counter);
+  Serial_Flush_TX("FA" + String(result2) + ";;");
+  delay(20);
+}
+
 void Serial_Flush_TX(String command)
 {
   Serial.flush(); // wait until TX buffer is empty
@@ -470,7 +473,6 @@ void Serial_Flush_TX(String command)
   Serial.println(command);
   delay(20);
 }
-
 void setup()
 {
   analogReadResolution(12);
@@ -496,6 +498,9 @@ void loop()
   button1.tick();
   button2.tick();
   button3.tick();
+  if (Asked == false) {
+    Sendd_Frequency();
+  }
   //askForFrequency();
   // encoder->tick(); // Check the Step Encoder.
 }
