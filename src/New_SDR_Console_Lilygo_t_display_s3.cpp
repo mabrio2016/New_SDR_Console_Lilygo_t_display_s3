@@ -66,8 +66,12 @@ ICACHE_RAM_ATTR void Ask_Switch_Check(); // Ask frequence switch interupt rotine
 
 volatile int Analog_Reading, Filtered_Analog_Reading, TempAnalog_Value= 0; // Used for the annalog input Squelch potentiometer
 volatile float average_Analog_Reading = 0; // Used for the annalog input Squelch potentiometer
-uint64_t counter = 0;
-uint64_t last_counter = 0;
+volatile long counter = 0;
+volatile long Memo1_counter = 0;
+volatile long Memo2_counter = 0;
+volatile long Memo3_counter = 0;
+
+//uint64_t last_counter = 0;
 volatile bool LockEncoder = false;
 volatile bool Asked = true;
 
@@ -374,7 +378,14 @@ void IRAM_ATTR checkTicks1()
 
 void singleClick1()
 {
+  counter = Memo1_counter;
   memo1 = LED_Red;
+  if (memo2 == LED_Red){
+    memo2 = LED_Blue;  
+  }
+  if (memo3 == LED_Red){
+    memo3 = LED_Blue;  
+  }
 }
 
 void doubleClick1()
@@ -385,11 +396,13 @@ void doubleClick1()
 void pressStart1()
 { // this function will be called when the button1 was held down for 1 second or more.
   memo1 = back;
+  Memo1_counter = counter;
 }
 
 void pressStop1()
 { // this function will be called when the button1 was released after a long hold.
   memo1 = LED_Blue;
+ 
 }
 
 void IRAM_ATTR checkTicks2()
@@ -399,9 +412,15 @@ void IRAM_ATTR checkTicks2()
 
 void singleClick2()
 {
+  counter = Memo2_counter;
+  if (memo1 == LED_Red){
+    memo1 = LED_Blue;  
+  }
+  if (memo3 == LED_Red){
+    memo3 = LED_Blue;  
+  }
   memo2 = LED_Red;
-  // Serial.println("Singlelick1() detected.");
-}
+}  // Serial.println("Singlelick1() detected.");
 
 void doubleClick2()
 {
@@ -411,6 +430,7 @@ void doubleClick2()
 void pressStart2()
 { // this function will be called when the button1 was held down for 1 second or more.
   memo2 = back;
+  Memo2_counter = counter;
 }
 
 void pressStop2()
@@ -425,9 +445,15 @@ void IRAM_ATTR checkTicks3()
 
 void singleClick3()
 {
+  counter = Memo3_counter;
+  if (memo1 == LED_Red){
+    memo1 = LED_Blue;  
+  }
+  if (memo2 == LED_Red){
+    memo2 = LED_Blue;  
+  }
   memo3 = LED_Red;
-  // Serial.println("Singlelick1() detected.");
-}
+}  // Serial.println("Singlelick1() detected.")
 
 void doubleClick3()
 {
@@ -437,6 +463,7 @@ void doubleClick3()
 void pressStart3()
 { // this function will be called when the button1 was held down for 1 second or more.
   memo3 = back;
+  Memo2_counter = counter;  
 }
 
 void pressStop3()
