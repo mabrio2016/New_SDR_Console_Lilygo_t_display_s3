@@ -32,7 +32,7 @@ TFT_eSprite sprite = TFT_eSprite(&tft);
 #define PIN_CLK GPIO_NUM_2              // Used for the Step Rotary Encoder
 #define PIN_DT GPIO_NUM_3               // Used for the Step Rotary Encoder
 
-#define Encoder_Switch GPIO_NUM_10        // Used for the Step Rotary Encoder Switch
+#define Encoder_Switch GPIO_NUM_10                      // Used for the Step Rotary Encoder Switch
 OneButton Encoder_Switch_button(Encoder_Switch, true);  // Used for the Step Rotary Encoder Switch
 
 #define Memo_button1 GPIO_NUM_11        // Used for the Memo Button1
@@ -45,20 +45,25 @@ OneButton button3(Memo_button3, true);  // Used for the Memo Button3
 int memo1 = back;
 int memo2 = back;
 int memo3 = back;
-int squelch = 0;
+int connected = back;
 int Step = 1;
+//int ValuePos = 0;
 bool invert = false;
 int bright = 6;
 int brightnesses[10] = {35, 70, 105, 140, 175, 210, 250};
-int pot = 0;        // Needs to be reviewd
-int newPos = 0;     // Used by the Step rotary Encoder
+int pot = 0;        // ???? Needs to be reviewd
+int newPos = 1;     // Used by the Step rotary Encoder
 static int pos = 1; // Used by the Step rotary Encoder
 
 RotaryEncoder *encoder = nullptr; // A pointer to the dynamic created Step Rotary Encoder instance.
 String Frequency = "";
-String Squelch_ = " "; //"SQLCH "
-String Volume_ = " ";  //"VOLM "
-
+//String Squelch_ = " "; // To disply "SQLCH "  //Not necessry ???
+int SQLCH = 0; // Holds the Asked momory squelch value
+int squelch = 0;
+String Volume_ = " ";  //To display "VOLM "
+String Step_ = "Hz";  // Hz or KHz
+int dispStep_ = 0;
+bool ToSentFrequncyFlag = false;
 //------------------------- It might be removed ------
 ICACHE_RAM_ATTR void ai0(); // Encoder Pin A //interupt rotine
 // ICACHE_RAM_ATTR void ai1(); //Encoder Pin B //interupt rotine
@@ -93,12 +98,12 @@ void ai0();
 char *ultoa(uint64_t val, char *s);
 IRAM_ATTR void checkPosition();
 void step();
-void frequency();
-void IRAM_ATTR checkTicks();
-void singleClick();
-void doubleClick();
-void pressStart();
-void pressStop();
+void Show_frequency();
+void IRAM_ATTR checkTicks_Encoder();
+void singleClick_Encoder();
+void doubleClick_Encoder();
+void pressStart_Encoder();
+void pressStop_Encoder();
 void IRAM_ATTR checkTicks1();
 void singleClick1();
 void doubleClick1();
@@ -116,6 +121,8 @@ void pressStart3();
 void pressStop3();
 void askForFrequency();
 void Sendd_Frequency();
+void askSquelch();
+void Send_Squelch();
 void Serial_Flush_TX(String command);
 
 
@@ -127,21 +134,27 @@ void draw()
   sprite.setTextDatum(2);
   sprite.drawString(Frequency, 316, 85);
   sprite.setFreeFont(&middle2);
-  sprite.drawFloat(squelch, 0, 314, 10);
-  sprite.drawFloat(Step, 0, 160, 10);
+  sprite.drawNumber(squelch, 314, 10);
+  sprite.drawNumber(dispStep_, 160, 10);
   sprite.setTextDatum(0);
   sprite.setFreeFont(&middle);
   sprite.setTextColor(back, Black);
-  sprite.drawString(Squelch_, 170, 6);
+  //sprite.drawString(Squelch_, 170, 6);
   sprite.drawString(Volume_, 170, 26);
   sprite.drawString("STEP ", 35, 6);
+  sprite.drawNumber(SQLCH, 5, 85);
 
+  // Memo LEDs
   sprite.fillCircle(68, 61, 8, Black);
   sprite.fillCircle(68, 61, 5, memo1);
   sprite.fillCircle(160, 61, 8, Black);
   sprite.fillCircle(160, 61, 5, memo2);
   sprite.fillCircle(251, 61, 8, Black);
   sprite.fillCircle(251, 61, 5, memo3);
+
+  //Connected LED
+  sprite.fillCircle(15, 13, 8, Black);
+  sprite.fillCircle(15, 13, 5, connected);
 
   sprite.setTextColor(Black, back);
 
@@ -150,9 +163,9 @@ void draw()
   sprite.drawString("Mem3", 185, 55);
 
   sprite.setFreeFont(&middle1);
-  sprite.drawString("Hz", 290, 60);
+  sprite.drawString("Hz", 290, 60); // Frequency 
   sprite.setFreeFont(&middle);
-  sprite.drawString("KHz", 35, 26);
+  sprite.drawString(Step_, 35, 26); // Step
 
   sprite.fillRect(30, 46, 134, 4, TFT_MAROON); // Step Box Botton Line
   sprite.fillRect(30, 1, 4, 46, TFT_MAROON);   // Step Box Left Line
@@ -191,23 +204,6 @@ void draw()
   sprite.pushSprite(0, 0);
 }
 
-void Squelch()
-{
-  Analog_Reading = analogRead(1);
-  average_Analog_Reading += 0.08 * (Analog_Reading - average_Analog_Reading); // one pole digital filter, about 20Hz cutoff
-  Filtered_Analog_Reading = (average_Analog_Reading - 200) / 10;
-  if (Filtered_Analog_Reading != TempAnalog_Value)
-  {
-    Squelch_ = "SQLCH ";
-    Volume_ = "";
-    squelch = map(Filtered_Analog_Reading, -20, 360, 1, 255);
-    char result[3];
-    sprintf(result, "%03d", squelch);
-    if (Asked == false) {
-      Serial_Flush_TX("SQ0" + String(result) + ";;");
-    }    
-  }
-}
 
 void initGpio()
 {
@@ -226,11 +222,11 @@ void initGpio()
   attachInterrupt(digitalPinToInterrupt(Memo_button3), checkTicks3, CHANGE); // Used detect the Memo2 button
   
   // Used detect the Step Rotary Switch clicks
-  Encoder_Switch_button.attachClick(singleClick);
-  Encoder_Switch_button.attachDoubleClick(doubleClick);
+  Encoder_Switch_button.attachClick(singleClick_Encoder);
+  Encoder_Switch_button.attachDoubleClick(doubleClick_Encoder);
   Encoder_Switch_button.setPressMs(1000); // that is the time when LongPressStart is called
-  Encoder_Switch_button.attachLongPressStart(pressStart);
-  Encoder_Switch_button.attachLongPressStop(pressStop);
+  Encoder_Switch_button.attachLongPressStart(pressStart_Encoder);
+  Encoder_Switch_button.attachLongPressStop(pressStop_Encoder);
 
   // Used detect the Memo1 button clicks
   button1.attachClick(singleClick1);
@@ -279,12 +275,12 @@ void ai0()
       }
       else
       {
-        counter = counter + (pos);
+        counter = counter + (Step);
       }
     }
     else
     {
-      if (counter != 0)
+      if (counter > 0)
       {
         if (counter < 1000)
         {
@@ -292,16 +288,22 @@ void ai0()
         }
         else
         {
-          counter = counter - (pos);
+          counter = counter - (Step);
+          if (counter < 0 ){
+            //Serial.println(counter);
+            counter = 0;
+          }          
         }
       }
     }
+    ToSentFrequncyFlag = true;
   }
 }
 
 IRAM_ATTR void checkPosition() // Interrupt used for the Step Rotary Encoder
 {
   encoder->tick(); // just call tick() to check the state.
+  step();
 }
 
 char *ultoa(uint64_t val, char *s)
@@ -323,50 +325,68 @@ void step()
   newPos = encoder->getPosition();
   if (pos != newPos)
   {
-    Squelch_ = "";
+    pos = newPos;
     Volume_ = " VOL  ";
     if (newPos <= 0)
     {
       newPos = 1;
       encoder->setPosition(1);
     }
-    if (newPos >= 100)
+    if (newPos >= 1001)
     {
-      newPos = 100;
-      encoder->setPosition(100);
+      newPos = 1001;
+      encoder->setPosition(1001);
     }
-    pos = newPos;
-    Step = pos;
+    if (newPos > 1 && newPos < 1000){  //if Step = 1,  do not multiply the step value
+      int PosX10 = newPos;
+      PosX10 = (PosX10 - 1) * 10;
+      Step = PosX10;
+      dispStep_ = Step;
+    }
+    else 
+    {
+      Step = newPos;
+      dispStep_ = Step;  
+    }
+    if (pos > 100){
+      Step = (pos - 100) * 1000;
+      dispStep_ = Step / 1000;
+      Step_ = "KHz";
+    }
+    else{
+      Step_ = "Hz";
+    } 
   }
+  //dispStep_ = Step; 
 }
 
-void frequency()
+void Show_frequency()
 {
   strcpy(Freq_Hz, ultoa(counter, Received_Freq));
   Frequency = Freq_Hz;
 }
 
-void IRAM_ATTR checkTicks()
+void IRAM_ATTR checkTicks_Encoder()
 {
-  button1.tick(); // just call tick() to check the state.
+  Encoder_Switch_button.tick(); // just call tick() to check the state.
 }
 
-void singleClick()
+void singleClick_Encoder()
 {
   
 }
 
-void doubleClick()
+void doubleClick_Encoder()
 {
   askForFrequency();
 }
 
-void pressStart()
+void pressStart_Encoder()
 { 
   
 }
 
-void pressStop()
+void pressStop_Encoder()
 {
 
 }
@@ -378,8 +398,14 @@ void IRAM_ATTR checkTicks1()
 
 void singleClick1()
 {
-  counter = Memo1_counter;
-  memo1 = LED_Red;
+  if (Memo1_counter != 0){
+    counter = Memo1_counter;
+    memo1 = LED_Red;
+    ToSentFrequncyFlag = true;
+    char result[3];
+    sprintf(result, "%03d", SQLCH);
+    Serial_Flush_TX("SQ0" + String(SQLCH) + ";;"); //("SQ0220;;"); 
+  }  
   if (memo2 == LED_Red){
     memo2 = LED_Blue;  
   }
@@ -390,19 +416,21 @@ void singleClick1()
 
 void doubleClick1()
 {
-  // Serial.println("doubleClick1() detected.");
+  memo1 = back;
+  Memo1_counter = 0;
 }
 
 void pressStart1()
 { // this function will be called when the button1 was held down for 1 second or more.
   memo1 = back;
   Memo1_counter = counter;
+  memo1 = LED_Blue;
+  void askSquelch();
 }
 
 void pressStop1()
 { // this function will be called when the button1 was released after a long hold.
-  memo1 = LED_Blue;
- 
+  
 }
 
 void IRAM_ATTR checkTicks2()
@@ -412,30 +440,34 @@ void IRAM_ATTR checkTicks2()
 
 void singleClick2()
 {
-  counter = Memo2_counter;
+  if (Memo2_counter != 0){
+    counter = Memo2_counter;
+    memo2 = LED_Red;
+    ToSentFrequncyFlag = true;
+  }
   if (memo1 == LED_Red){
     memo1 = LED_Blue;  
   }
   if (memo3 == LED_Red){
     memo3 = LED_Blue;  
   }
-  memo2 = LED_Red;
 }  // Serial.println("Singlelick1() detected.");
 
 void doubleClick2()
 {
-  // Serial.println("doubleClick1() detected.");
+  memo2 = back;
+  Memo2_counter = 0;
 }
 
 void pressStart2()
 { // this function will be called when the button1 was held down for 1 second or more.
-  memo2 = back;
   Memo2_counter = counter;
+  memo2 = LED_Blue;
 }
 
 void pressStop2()
 { // this function will be called when the button1 was released after a long hold.
-  memo2 = LED_Blue;
+
 }
 
 void IRAM_ATTR checkTicks3()
@@ -445,14 +477,17 @@ void IRAM_ATTR checkTicks3()
 
 void singleClick3()
 {
-  counter = Memo3_counter;
+  if (Memo3_counter != 0){
+    counter = Memo3_counter;
+    memo3 = LED_Red;
+    ToSentFrequncyFlag = true;
+  }
   if (memo1 == LED_Red){
     memo1 = LED_Blue;  
   }
   if (memo2 == LED_Red){
     memo2 = LED_Blue;  
   }
-  memo3 = LED_Red;
 }  // Serial.println("Singlelick1() detected.")
 
 void doubleClick3()
@@ -463,34 +498,84 @@ void doubleClick3()
 void pressStart3()
 { // this function will be called when the button1 was held down for 1 second or more.
   memo3 = back;
-  Memo2_counter = counter;  
+  Memo2_counter = counter;
+  memo3 = LED_Blue; 
 }
 
 void pressStop3()
 { // this function will be called when the button1 was released after a long hold.
-  memo3 = LED_Blue;
 }
 
 void askForFrequency(){
-  counter = 0;
-  Serial_Flush_TX("FA;");
   LockEncoder = true;
   Asked = true;
+  counter = 0; //To disply 0 if no responce
+  Serial_Flush_TX("FA;");
   if(Serial.available()){
     String rxresponse = Serial.readStringUntil(';');
     if (rxresponse.startsWith("FA")) {
       counter = rxresponse.substring(2, 13).toInt();
       LockEncoder = false;
+      connected = LED_Yellow;
+      Show_frequency();
       Asked = false;
     }      
+  }
+  else{
+    connected = back;
   }
 }
 
 void Sendd_Frequency(){
-  char result2[11]; 
-  sprintf(result2, "%011d", counter);
-  Serial_Flush_TX("FA" + String(result2) + ";;");
+  char result[11]; 
+  sprintf(result, "%011d", counter);
+  Serial_Flush_TX("FA" + String(result) + ";;");
   delay(20);
+  //if(Serial.available()){
+    //String rxresponse = Serial.readStringUntil(';');
+    //connected = LED_Yellow;
+  //}
+  //else {
+    //connected = back;  
+  //}
+}
+
+void askSquelch(){
+  LockEncoder = true;
+  Asked = true;
+  squelch = 0;
+  Serial_Flush_TX("SQ0;");  
+  if(Serial.available()){
+    String rxresponse = Serial.readStringUntil(';');
+    if (rxresponse.startsWith("SQ")) {
+      squelch = rxresponse.substring(3, 3).toInt();
+      SQLCH = rxresponse.substring(3, 3).toInt();  // Used to store the memory 
+      connected = LED_Yellow;
+      LockEncoder = true;
+      Asked = false;
+    }      
+  }
+  else{
+    connected = back;
+  }
+}
+
+void Send_Squelch()
+{
+  if (Asked != true);{
+    Analog_Reading = analogRead(1);
+    average_Analog_Reading += 0.08 * (Analog_Reading - average_Analog_Reading); // one pole digital filter, about 20Hz cutoff
+    Filtered_Analog_Reading = (average_Analog_Reading - 200) / 10;
+    if (Filtered_Analog_Reading != TempAnalog_Value)
+    {
+      Volume_ = "";
+      squelch = map(Filtered_Analog_Reading, -20, 360, 1, 255);
+      char result[3];
+      sprintf(result, "%03d", squelch);
+      Serial_Flush_TX("SQ0" + String(result) + ";;");
+      TempAnalog_Value = Filtered_Analog_Reading;
+    }
+  }
 }
 
 void Serial_Flush_TX(String command)
@@ -500,6 +585,7 @@ void Serial_Flush_TX(String command)
   Serial.println(command);
   delay(20);
 }
+
 void setup()
 {
   analogReadResolution(12);
@@ -517,17 +603,27 @@ void setup()
 
 void loop()
 {
-  Squelch();
-  step();
-  frequency();
+  Send_Squelch();  // Need to be in the loop, because no interrupt is configured fo the ADC Potentiomenter reading,
   draw();
   Encoder_Switch_button.tick();
   button1.tick();
   button2.tick();
   button3.tick();
+
   if (Asked == false) {
-    Sendd_Frequency();
+    if (ToSentFrequncyFlag == true){
+      Sendd_Frequency();
+      Show_frequency();
+      ToSentFrequncyFlag = false;
+    }
   }
+  // if (LockEncoder == false) {
+  //   connected = LED_Yellow;
+  // }
+  // if (LockEncoder == true) {
+  //   connected = back;
+  // }
+  
   //askForFrequency();
   // encoder->tick(); // Check the Step Encoder.
 }
