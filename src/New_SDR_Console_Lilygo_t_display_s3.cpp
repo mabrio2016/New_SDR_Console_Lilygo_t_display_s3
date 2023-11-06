@@ -6,6 +6,8 @@
 #include <RotaryEncoder.h>
 #include "OneButton.h"
 #include "driver/gpio.h"
+#include "driver/adc.h"
+#include "WiFi.h"
 
 TFT_eSPI tft = TFT_eSPI();
 TFT_eSprite sprite = TFT_eSprite(&tft);
@@ -28,6 +30,8 @@ TFT_eSprite sprite = TFT_eSprite(&tft);
 #define LED_Blue TFT_BLUE
 #define LED_Red TFT_RED
 #define LED_Yellow TFT_YELLOW
+
+#define Squelch_ADC_Pin GPIO_NUM_1              // Used for the squelch ADC poteniometer
 
 #define PIN_CLK GPIO_NUM_2              // Used for the Step Rotary Encoder
 #define PIN_DT GPIO_NUM_3               // Used for the Step Rotary Encoder
@@ -58,18 +62,18 @@ static int pos = 1; // Used by the Step rotary Encoder
 RotaryEncoder *encoder = nullptr; // A pointer to the dynamic created Step Rotary Encoder instance.
 String Frequency = "";
 //String Squelch_ = " "; // To disply "SQLCH "  //Not necessry ???
-int SQLCH = 0; // Holds the Asked momory squelch value
+String SQLCH = "100"; // Holds the Asked momory squelch value
 int squelch = 0;
 String Volume_ = " ";  //To display "VOLM "
 String Step_ = "Hz";  // Hz or KHz
 int dispStep_ = 0;
-bool ToSentFrequncyFlag = false;
+bool ToSentFrequncyFlag = true;
 //------------------------- It might be removed ------
 ICACHE_RAM_ATTR void ai0(); // Encoder Pin A //interupt rotine
 // ICACHE_RAM_ATTR void ai1(); //Encoder Pin B //interupt rotine
 ICACHE_RAM_ATTR void Ask_Switch_Check(); // Ask frequence switch interupt rotine
 
-volatile int Analog_Reading, Filtered_Analog_Reading, TempAnalog_Value= 0; // Used for the annalog input Squelch potentiometer
+volatile int Analog_Reading, Filtered_Analog_Reading, Temp_squelch= 0; // Used for the annalog input Squelch potentiometer
 volatile float average_Analog_Reading = 0; // Used for the annalog input Squelch potentiometer
 volatile long counter = 0;
 volatile long Memo1_counter = 0;
@@ -78,7 +82,7 @@ volatile long Memo3_counter = 0;
 
 //uint64_t last_counter = 0;
 volatile bool LockEncoder = false;
-volatile bool Asked = true;
+volatile bool Asked = false;
 
 const int P1 = GPIO_NUM_16; //  GPIO16 -> Frequncy Rotary Encoder A
 const int P2 = GPIO_NUM_21; //  GPIO21 -> Frequncy Rotary Encoder B
@@ -120,11 +124,11 @@ void doubleClick3();
 void pressStart3();
 void pressStop3();
 void askForFrequency();
-void Sendd_Frequency();
+void Send_Frequency();
 void askSquelch();
-void Send_Squelch();
+void Read_Squelch();
+void Send_Squelch(String squelch_Value);
 void Serial_Flush_TX(String command);
-
 
 void draw()
 {
@@ -142,7 +146,7 @@ void draw()
   //sprite.drawString(Squelch_, 170, 6);
   sprite.drawString(Volume_, 170, 26);
   sprite.drawString("STEP ", 35, 6);
-  sprite.drawNumber(SQLCH, 5, 85);
+  sprite.drawString(SQLCH, 5, 85);
 
   // Memo LEDs
   sprite.fillCircle(68, 61, 8, Black);
@@ -204,9 +208,14 @@ void draw()
   sprite.pushSprite(0, 0);
 }
 
-
 void initGpio()
 {
+  WiFi.mode(WIFI_OFF);  // Disable the WiFi
+  btStop();             // Disable the Bluetooth
+  
+  //Used for the Squelch potenciometer.
+  analogSetPinAttenuation(Squelch_ADC_Pin, ADC_11db);
+
   // Used for the Frequency Rotary Encoder
   pinMode(P1, INPUT_PULLUP);
   pinMode(P2, INPUT_PULLUP);
@@ -402,9 +411,10 @@ void singleClick1()
     counter = Memo1_counter;
     memo1 = LED_Red;
     ToSentFrequncyFlag = true;
-    char result[3];
-    sprintf(result, "%03d", SQLCH);
-    Serial_Flush_TX("SQ0" + String(SQLCH) + ";;"); //("SQ0220;;"); 
+    // char result[3];
+    // sprintf(result, "%03d", SQLCH);
+    // Serial_Flush_TX("SQ0" + String(SQLCH) + ";;"); //("SQ0220;;"); 
+    Send_Squelch(SQLCH);
   }  
   if (memo2 == LED_Red){
     memo2 = LED_Blue;  
@@ -421,16 +431,31 @@ void doubleClick1()
 }
 
 void pressStart1()
-{ // this function will be called when the button1 was held down for 1 second or more.
-  memo1 = back;
+{ 
+  LockEncoder = true;
+  Asked = true;
   Memo1_counter = counter;
   memo1 = LED_Blue;
-  void askSquelch();
+  squelch = 0;
+  Serial.println("SQ0;");
+  delay(20);
 }
 
 void pressStop1()
-{ // this function will be called when the button1 was released after a long hold.
-  
+{
+  //Serial.flush(); // wait until TX buffer is empty.  I will hold rthe execution if COM port is not connected
+  connected = back;
+  if(Serial.available()){
+    delay(20);
+    String rxresponse = Serial.readStringUntil(';');
+    if (rxresponse.startsWith("SQ")) {
+      squelch = rxresponse.substring(3, 3).toInt();
+      SQLCH = rxresponse.substring(3, 3).toInt();  // Used to store the memory 
+      connected = LED_Yellow;
+      LockEncoder = false;
+      Asked = false;
+    }      
+  }
 }
 
 void IRAM_ATTR checkTicks2()
@@ -507,18 +532,24 @@ void pressStop3()
 }
 
 void askForFrequency(){
+  connected = LED_Yellow;
   LockEncoder = true;
   Asked = true;
   counter = 0; //To disply 0 if no responce
-  Serial_Flush_TX("FA;");
+  //connected = back;
+  //Serial_Flush_TX("FA;");
+  Serial.flush(); // wait until TX buffer is empty.  I will hold rthe execution if COM port is not connected
+  delay(20);
+  Serial.println("FA;");
+  delay(20);
   if(Serial.available()){
+    delay(20);
     String rxresponse = Serial.readStringUntil(';');
     if (rxresponse.startsWith("FA")) {
       counter = rxresponse.substring(2, 13).toInt();
       LockEncoder = false;
-      connected = LED_Yellow;
-      Show_frequency();
       Asked = false;
+      Show_frequency();
     }      
   }
   else{
@@ -526,7 +557,7 @@ void askForFrequency(){
   }
 }
 
-void Sendd_Frequency(){
+void Send_Frequency(){
   char result[11]; 
   sprintf(result, "%011d", counter);
   Serial_Flush_TX("FA" + String(result) + ";;");
@@ -544,12 +575,15 @@ void askSquelch(){
   LockEncoder = true;
   Asked = true;
   squelch = 0;
-  Serial_Flush_TX("SQ0;");  
+  //Serial_Flush_TX("SQ0;"); 
+  delay(20);
+  Serial.println("SQ0;");
+  Serial.flush(); // wait until TX buffer is empty.  I will hold rthe execution if COM port is not connected
   if(Serial.available()){
     String rxresponse = Serial.readStringUntil(';');
     if (rxresponse.startsWith("SQ")) {
       squelch = rxresponse.substring(3, 3).toInt();
-      SQLCH = rxresponse.substring(3, 3).toInt();  // Used to store the memory 
+      SQLCH = rxresponse;  //.substring(3, 3).toInt();  // Used to store the memory 
       connected = LED_Yellow;
       LockEncoder = true;
       Asked = false;
@@ -560,27 +594,39 @@ void askSquelch(){
   }
 }
 
-void Send_Squelch()
+void Read_Squelch()
 {
-  if (Asked != true);{
-    Analog_Reading = analogRead(1);
-    average_Analog_Reading += 0.08 * (Analog_Reading - average_Analog_Reading); // one pole digital filter, about 20Hz cutoff
-    Filtered_Analog_Reading = (average_Analog_Reading - 200) / 10;
-    if (Filtered_Analog_Reading != TempAnalog_Value)
+  if (Asked == false);{
+    int average = 0;
+    for (int i=0; i < 20; i++) {
+      average = average + analogRead(Squelch_ADC_Pin);
+    }
+    average = average/10;    
+    Analog_Reading = (Analog_Reading * (12-1) + average) / 12; // average_Analog_Reading += 0.1 * (Analog_Reading - average_Analog_Reading); // one pole digital filter, about 20Hz cutoff
+    Filtered_Analog_Reading = (Analog_Reading - 250) / 10;   // Used to adjust the minimum value = 1
+    squelch = map(Filtered_Analog_Reading, -25, 800, 1, 255);
+    if (squelch != Temp_squelch)
     {
       Volume_ = "";
-      squelch = map(Filtered_Analog_Reading, -20, 360, 1, 255);
+      //squelch = map(Filtered_Analog_Reading, -25, 800, 1, 255);
+      //Send_Squelch(squelch);
       char result[3];
       sprintf(result, "%03d", squelch);
       Serial_Flush_TX("SQ0" + String(result) + ";;");
-      TempAnalog_Value = Filtered_Analog_Reading;
+      Temp_squelch = squelch;
     }
   }
 }
 
+void Send_Squelch(String squelch_Value){
+  //char result[3];
+  //sprintf(result, "%03d", squelch_Value);
+  Serial_Flush_TX("SQ0" + squelch_Value + ";;");
+}
+
 void Serial_Flush_TX(String command)
 {
-  Serial.flush(); // wait until TX buffer is empty
+  //Serial.flush(); // wait until TX buffer is empty // I believe it is not needed
   delay(20);
   Serial.println(command);
   delay(20);
@@ -588,7 +634,6 @@ void Serial_Flush_TX(String command)
 
 void setup()
 {
-  analogReadResolution(12);
   tft.init();
   tft.setRotation(1);
   sprite.createSprite(320, 170);
@@ -603,7 +648,7 @@ void setup()
 
 void loop()
 {
-  Send_Squelch();  // Need to be in the loop, because no interrupt is configured fo the ADC Potentiomenter reading,
+  Read_Squelch();  // Need to be in the loop, because no interrupt is configured fo the ADC reading,
   draw();
   Encoder_Switch_button.tick();
   button1.tick();
@@ -612,7 +657,7 @@ void loop()
 
   if (Asked == false) {
     if (ToSentFrequncyFlag == true){
-      Sendd_Frequency();
+      Send_Frequency();
       Show_frequency();
       ToSentFrequncyFlag = false;
     }
