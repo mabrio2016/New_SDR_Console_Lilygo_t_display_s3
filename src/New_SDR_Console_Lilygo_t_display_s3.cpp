@@ -24,9 +24,10 @@ TFT_eSprite sprite = TFT_eSprite(&tft);
 #define dc Cousine_Regular_38
 
 #define back 0x9D91
-#define color2 0x18E3
+#define Gray 0x18E3
 #define Black TFT_BLACK
 #define Dark_Blue TFT_NAVY
+#define Dark_Green TFT_DARKGREEN
 #define LED_Blue TFT_BLUE
 #define LED_Red TFT_RED
 #define LED_Yellow TFT_YELLOW
@@ -130,6 +131,7 @@ void Send_Frequency();
 String askSquelch();
 void Read_Squelch();
 void Send_Squelch(String squelch_Value);
+String askForModulation();
 void Serial_Flush_TX(String command);
 
 void draw()
@@ -137,8 +139,15 @@ void draw()
   sprite.setTextColor(Dark_Blue, back);
   sprite.fillSprite(back);
   sprite.setFreeFont(&Freqfont);
+  sprite.setTextDatum(0);
+  sprite.fillRoundRect(5, 89, 311, 50, 6, TFT_MAROON);
+  sprite.drawRoundRect(5, 89, 311, 50, 6, Black);
   sprite.setTextDatum(2);
-  sprite.drawString(Frequency, 316, 85);
+  sprite.setTextColor(back, TFT_MAROON);
+  sprite.drawString(Frequency, 309, 95);
+  sprite.setFreeFont(&middle1);
+  sprite.drawString("Hz ", 316, 67);
+  sprite.setTextColor(Dark_Blue, back);
   sprite.setFreeFont(&middle2);
   sprite.drawNumber(squelch, 314, 10);
   sprite.drawNumber(dispStep_, 160, 10);
@@ -148,15 +157,23 @@ void draw()
   sprite.drawString(Squelch_, 170, 6);
   sprite.drawString(Volume_, 170, 26);
   sprite.drawString("STEP ", 35, 6);
+  sprite.setFreeFont(&middle1);
+  sprite.setTextColor(Black, back);
+  sprite.drawString("LSB ", 6, 62);
+
   //sprite.drawString(SQLCH, 5, 85);
 
   // Memo LEDs
-  sprite.fillCircle(68, 61, 8, Black);
-  sprite.fillCircle(68, 61, 5, memo1);
-  sprite.fillCircle(160, 61, 8, Black);
-  sprite.fillCircle(160, 61, 5, memo2);
-  sprite.fillCircle(251, 61, 8, Black);
-  sprite.fillCircle(251, 61, 5, memo3);
+  sprite.setTextColor(back, Dark_Green);
+  sprite.fillRoundRect(63, 54, 214, 30, 6, Dark_Green);
+  sprite.drawRoundRect(63, 54, 214, 30, 6, Dark_Green);
+  sprite.drawString("Memories", 68, 58);
+  sprite.fillCircle(204, 68, 8, Black);
+  sprite.fillCircle(204, 68, 5, memo1);
+  sprite.fillCircle(233, 68, 8, Black);
+  sprite.fillCircle(233, 68, 5, memo2);
+  sprite.fillCircle(262, 68, 8, Black);
+  sprite.fillCircle(262, 68, 5, memo3);
 
   //Connected LED
   sprite.fillCircle(15, 13, 8, Black);
@@ -164,12 +181,12 @@ void draw()
 
   sprite.setTextColor(Black, back);
 
-  sprite.drawString("Mem1", 6, 55);
-  sprite.drawString("Mem2", 95, 55);
-  sprite.drawString("Mem3", 185, 55);
+  //sprite.drawString("Memories", 95, 59);
+  //sprite.drawString("Mem2", 95, 55);
+  //sprite.drawString("Mem3", 185, 55);
 
-  sprite.setFreeFont(&middle1);
-  sprite.drawString("Hz", 290, 60); // Frequency 
+  //sprite.setFreeFont(&middle1);
+  
   sprite.setFreeFont(&middle);
   sprite.drawString(Step_, 35, 26); // Step
 
@@ -182,6 +199,8 @@ void draw()
   sprite.fillRect(165, 1, 4, 46, TFT_MAROON);   // squelch Box Left Line
   sprite.fillRect(165, 1, 154, 4, TFT_MAROON);  // squelch Box Top Line
   sprite.fillRect(315, 1, 4, 46, TFT_MAROON);   // squelch Box Right Line
+
+  //sprite.fillRoundRect(5, 89, 312, 50, 6, TFT_MAROON);
   // for(int i=0;i<0;i++)
   // sprite.fillRect(6+(i*8),26,6,5,color2);
   sprite.setFreeFont(&small);
@@ -206,7 +225,7 @@ void draw()
     }
     temp = temp + 1;
   }
-  sprite.fillTriangle(160, 138, 156, 130, 164, 130, Black);
+  //sprite.fillTriangle(160, 138, 156, 130, 164, 130, Black);
   sprite.pushSprite(0, 0);
 }
 
@@ -391,6 +410,15 @@ void singleClick_Encoder()
 void doubleClick_Encoder()
 {
   askForFrequency();
+  if (memo1 == LED_Red){
+    memo1 = LED_Blue;
+  }
+  if (memo2 == LED_Red){
+    memo2 = LED_Blue;
+  }
+  if (memo3 ==LED_Red){
+    memo3 = LED_Blue;
+  }
 }
 
 void pressStart_Encoder()
@@ -504,7 +532,8 @@ void singleClick3()
 
 void doubleClick3()
 {
-  // Serial.println("doubleClick1() detected.");
+  memo3 = back;
+  Memo3_counter = 0;
 }
 
 void pressStart3()
@@ -578,7 +607,7 @@ String askSquelch() {
     }      
   }
   else{
-    //connected = back;
+    connected = back;
   }
   return SQLCH;
 }
@@ -614,6 +643,60 @@ void Send_Squelch(String squelch_Value){
     squelch_Value = "00" + squelch_Value;
   }
   Serial_Flush_TX("SQ0" + squelch_Value + ";");
+}
+
+String askForModulation(){
+  LockEncoder = true;
+  Asked = true;
+  Serial.flush(); // wait until TX buffer is empty.  It will hold rthe execution if COM port is not connected
+  Serial.println("MD;");
+  String Modulation = "";
+  if(Serial.available()){
+    String rxresponse = Serial.readStringUntil(';');
+    if (rxresponse.startsWith("MD"))
+    {
+      int modumode = rxresponse.substring(2, 3).toInt();
+      switch (modumode)
+      {
+      case 0:
+      Modulation = "DSB";
+        break;
+      case 1:
+      Modulation = "LSB";
+        break;
+      case 2:
+      Modulation = "USB";
+        break;
+      case 3:
+      Modulation = "CW";
+        break;
+      case 4:
+        Modulation = "FM";
+        break;
+      case 5:
+        Modulation = "AM";
+        break;
+      case 6:
+        Modulation = "FSK";
+        break;
+      case 7:
+        Modulation = "CWR"; //(CW Reverse)
+        break;
+      case 8:
+        Modulation = "DRM";
+        break;
+      case 9:
+        Modulation = "FSR"; //(FSK Reverse);
+        break;      
+      default:
+        Modulation = "AM";
+        break;
+      }
+      Asked = false;
+      LockEncoder = false;
+    }
+  }
+  return Modulation;
 }
 
 void Serial_Flush_TX(String command)
