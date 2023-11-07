@@ -61,8 +61,7 @@ static int pos = 1; // Used by the Step rotary Encoder
 
 RotaryEncoder *encoder = nullptr; // A pointer to the dynamic created Step Rotary Encoder instance.
 String Frequency = "";
-//String Squelch_ = " "; // To disply "SQLCH "  //Not necessry ???
-String SQLCH = "100"; // Holds the Asked momory squelch value
+String Squelch_ = " "; // To disply "SQLCH " 
 int squelch = 0;
 String Volume_ = " ";  //To display "VOLM "
 String Step_ = "Hz";  // Hz or KHz
@@ -79,10 +78,13 @@ volatile long counter = 0;
 volatile long Memo1_counter = 0;
 volatile long Memo2_counter = 0;
 volatile long Memo3_counter = 0;
+String Memo1_SQLCH = "100";
+String Memo2_SQLCH = "100";
+String Memo3_SQLCH = "100";
 
 //uint64_t last_counter = 0;
-volatile bool LockEncoder = false;
-volatile bool Asked = false;
+bool LockEncoder = false;
+bool Asked = false;
 
 const int P1 = GPIO_NUM_16; //  GPIO16 -> Frequncy Rotary Encoder A
 const int P2 = GPIO_NUM_21; //  GPIO21 -> Frequncy Rotary Encoder B
@@ -125,7 +127,7 @@ void pressStart3();
 void pressStop3();
 void askForFrequency();
 void Send_Frequency();
-void askSquelch();
+String askSquelch();
 void Read_Squelch();
 void Send_Squelch(String squelch_Value);
 void Serial_Flush_TX(String command);
@@ -143,10 +145,10 @@ void draw()
   sprite.setTextDatum(0);
   sprite.setFreeFont(&middle);
   sprite.setTextColor(back, Black);
-  //sprite.drawString(Squelch_, 170, 6);
+  sprite.drawString(Squelch_, 170, 6);
   sprite.drawString(Volume_, 170, 26);
   sprite.drawString("STEP ", 35, 6);
-  sprite.drawString(SQLCH, 5, 85);
+  //sprite.drawString(SQLCH, 5, 85);
 
   // Memo LEDs
   sprite.fillCircle(68, 61, 8, Black);
@@ -336,6 +338,7 @@ void step()
   {
     pos = newPos;
     Volume_ = " VOL  ";
+    Squelch_ = "";
     if (newPos <= 0)
     {
       newPos = 1;
@@ -411,10 +414,7 @@ void singleClick1()
     counter = Memo1_counter;
     memo1 = LED_Red;
     ToSentFrequncyFlag = true;
-    // char result[3];
-    // sprintf(result, "%03d", SQLCH);
-    // Serial_Flush_TX("SQ0" + String(SQLCH) + ";;"); //("SQ0220;;"); 
-    Send_Squelch(SQLCH);
+    Serial_Flush_TX("SQ0" + Memo1_SQLCH + ";");
   }  
   if (memo2 == LED_Red){
     memo2 = LED_Blue;  
@@ -432,30 +432,14 @@ void doubleClick1()
 
 void pressStart1()
 { 
-  LockEncoder = true;
-  Asked = true;
   Memo1_counter = counter;
   memo1 = LED_Blue;
-  squelch = 0;
-  Serial.println("SQ0;");
-  delay(20);
+  Memo1_SQLCH = askSquelch();
 }
 
 void pressStop1()
 {
-  //Serial.flush(); // wait until TX buffer is empty.  I will hold rthe execution if COM port is not connected
-  connected = back;
-  if(Serial.available()){
-    delay(20);
-    String rxresponse = Serial.readStringUntil(';');
-    if (rxresponse.startsWith("SQ")) {
-      squelch = rxresponse.substring(3, 3).toInt();
-      SQLCH = rxresponse.substring(3, 3).toInt();  // Used to store the memory 
-      connected = LED_Yellow;
-      LockEncoder = false;
-      Asked = false;
-    }      
-  }
+
 }
 
 void IRAM_ATTR checkTicks2()
@@ -469,6 +453,7 @@ void singleClick2()
     counter = Memo2_counter;
     memo2 = LED_Red;
     ToSentFrequncyFlag = true;
+    Serial_Flush_TX("SQ0" + Memo2_SQLCH + ";");
   }
   if (memo1 == LED_Red){
     memo1 = LED_Blue;  
@@ -476,7 +461,7 @@ void singleClick2()
   if (memo3 == LED_Red){
     memo3 = LED_Blue;  
   }
-}  // Serial.println("Singlelick1() detected.");
+} 
 
 void doubleClick2()
 {
@@ -488,6 +473,7 @@ void pressStart2()
 { // this function will be called when the button1 was held down for 1 second or more.
   Memo2_counter = counter;
   memo2 = LED_Blue;
+  Memo2_SQLCH = askSquelch();
 }
 
 void pressStop2()
@@ -506,6 +492,7 @@ void singleClick3()
     counter = Memo3_counter;
     memo3 = LED_Red;
     ToSentFrequncyFlag = true;
+    Serial_Flush_TX("SQ0" + Memo3_SQLCH + ";");
   }
   if (memo1 == LED_Red){
     memo1 = LED_Blue;  
@@ -522,9 +509,9 @@ void doubleClick3()
 
 void pressStart3()
 { // this function will be called when the button1 was held down for 1 second or more.
-  memo3 = back;
-  Memo2_counter = counter;
-  memo3 = LED_Blue; 
+  Memo3_counter = counter;
+  memo3 = LED_Blue;
+  Memo3_SQLCH = askSquelch();
 }
 
 void pressStop3()
@@ -571,19 +558,20 @@ void Send_Frequency(){
   //}
 }
 
-void askSquelch(){
+String askSquelch() {
+  String SQLCH = "100";
   LockEncoder = true;
   Asked = true;
-  squelch = 0;
+  //squelch = 0;
   //Serial_Flush_TX("SQ0;"); 
   delay(20);
   Serial.println("SQ0;");
-  Serial.flush(); // wait until TX buffer is empty.  I will hold rthe execution if COM port is not connected
+  Serial.flush(); // wait until TX buffer is empty.  It will hold rthe execution if COM port is not connected
   if(Serial.available()){
     String rxresponse = Serial.readStringUntil(';');
-    if (rxresponse.startsWith("SQ")) {
-      squelch = rxresponse.substring(3, 3).toInt();
-      SQLCH = rxresponse;  //.substring(3, 3).toInt();  // Used to store the memory 
+    if (rxresponse.startsWith("SQ0")) {
+      squelch = rxresponse.substring(3,6).toInt();
+      SQLCH = rxresponse.substring(3,6);  // Used to store the memory 
       connected = LED_Yellow;
       LockEncoder = true;
       Asked = false;
@@ -592,6 +580,7 @@ void askSquelch(){
   else{
     connected = back;
   }
+  return SQLCH;
 }
 
 void Read_Squelch()
@@ -608,25 +597,28 @@ void Read_Squelch()
     if (squelch != Temp_squelch)
     {
       Volume_ = "";
-      //squelch = map(Filtered_Analog_Reading, -25, 800, 1, 255);
-      //Send_Squelch(squelch);
-      char result[3];
-      sprintf(result, "%03d", squelch);
-      Serial_Flush_TX("SQ0" + String(result) + ";;");
+      Squelch_ = "SQLCH ";
+      Send_Squelch(String(squelch));
       Temp_squelch = squelch;
     }
   }
 }
 
 void Send_Squelch(String squelch_Value){
-  //char result[3];
-  //sprintf(result, "%03d", squelch_Value);
-  Serial_Flush_TX("SQ0" + squelch_Value + ";;");
+  int IntValue = squelch_Value.toInt();
+  // the if conditions are needed to add leading zeros to the Squelch value (3 digits)
+  if (IntValue >= 10 && IntValue < 100) {
+    squelch_Value = "0" + squelch_Value;
+  }
+  if (IntValue < 10) {
+    squelch_Value = "00" + squelch_Value;
+  }
+  Serial_Flush_TX("SQ0" + squelch_Value + ";");
 }
 
 void Serial_Flush_TX(String command)
 {
-  //Serial.flush(); // wait until TX buffer is empty // I believe it is not needed
+  Serial.flush(); // wait until TX buffer is empty // I believe it is not needed
   delay(20);
   Serial.println(command);
   delay(20);
