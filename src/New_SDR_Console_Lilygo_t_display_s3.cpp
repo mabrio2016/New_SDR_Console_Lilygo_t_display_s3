@@ -519,7 +519,7 @@ void pressStop3()
 }
 
 void askForFrequency(){
-  connected = LED_Yellow;
+  //connected = LED_Yellow;
   LockEncoder = true;
   Asked = true;
   counter = 0; //To disply 0 if no responce
@@ -540,7 +540,7 @@ void askForFrequency(){
     }      
   }
   else{
-    connected = back;
+    //connected = back;
   }
 }
 
@@ -564,21 +564,21 @@ String askSquelch() {
   Asked = true;
   //squelch = 0;
   //Serial_Flush_TX("SQ0;"); 
-  delay(20);
-  Serial.println("SQ0;");
   Serial.flush(); // wait until TX buffer is empty.  It will hold rthe execution if COM port is not connected
+  Serial.println("SQ0;");
+  delay(20);
   if(Serial.available()){
     String rxresponse = Serial.readStringUntil(';');
     if (rxresponse.startsWith("SQ0")) {
       squelch = rxresponse.substring(3,6).toInt();
       SQLCH = rxresponse.substring(3,6);  // Used to store the memory 
-      connected = LED_Yellow;
-      LockEncoder = true;
+      //connected = LED_Yellow;
+      LockEncoder = false;
       Asked = false;
     }      
   }
   else{
-    connected = back;
+    //connected = back;
   }
   return SQLCH;
 }
@@ -618,7 +618,7 @@ void Send_Squelch(String squelch_Value){
 
 void Serial_Flush_TX(String command)
 {
-  Serial.flush(); // wait until TX buffer is empty // I believe it is not needed
+  //Serial.flush(); // wait until TX buffer is empty // I believe it is not needed
   delay(20);
   Serial.println(command);
   delay(20);
@@ -654,12 +654,12 @@ void loop()
       ToSentFrequncyFlag = false;
     }
   }
-  // if (LockEncoder == false) {
-  //   connected = LED_Yellow;
-  // }
-  // if (LockEncoder == true) {
-  //   connected = back;
-  // }
+  if (LockEncoder == false) {
+    connected = LED_Yellow;
+  }
+  if (LockEncoder == true) {
+    connected = back;
+  }
   
   //askForFrequency();
   // encoder->tick(); // Check the Step Encoder.
