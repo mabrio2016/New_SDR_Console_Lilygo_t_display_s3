@@ -59,6 +59,8 @@ int brightnesses[10] = {35, 70, 105, 140, 175, 210, 250};
 int pot = 0;        // ???? Needs to be reviewd
 int newPos = 1;     // Used by the Step rotary Encoder
 static int pos = 1; // Used by the Step rotary Encoder
+int modulationNumber = 0;   // Holds the Modulation number code
+String Modulation = ""; //Holds the 3 leters modulation mode
 
 RotaryEncoder *encoder = nullptr; // A pointer to the dynamic created Step Rotary Encoder instance.
 String Frequency = "";
@@ -66,7 +68,7 @@ String Squelch_ = " "; // To disply "SQLCH "
 int squelch = 0;
 String Volume_ = " ";  //To display "VOLM "
 String Step_ = "Hz";  // Hz or KHz
-int dispStep_ = 0;
+int dispStep_ = 1;
 bool ToSentFrequncyFlag = true;
 //------------------------- It might be removed ------
 ICACHE_RAM_ATTR void ai0(); // Encoder Pin A //interupt rotine
@@ -82,6 +84,12 @@ volatile long Memo3_counter = 0;
 String Memo1_SQLCH = "100";
 String Memo2_SQLCH = "100";
 String Memo3_SQLCH = "100";
+String Memo1_Modulation = "";
+String Memo2_Modulation = "";
+String Memo3_Modulation = "";
+String Memo1_modulationNumber = "";
+String Memo2_modulationNumber = "";
+String Memo3_modulationNumber = "";
 
 //uint64_t last_counter = 0;
 bool LockEncoder = false;
@@ -140,13 +148,16 @@ void draw()
   sprite.fillSprite(back);
   sprite.setFreeFont(&Freqfont);
   sprite.setTextDatum(0);
-  sprite.fillRoundRect(5, 89, 311, 50, 6, TFT_MAROON);
-  sprite.drawRoundRect(5, 89, 311, 50, 6, Black);
+  sprite.fillRoundRect(5, 89, 311, 50, 6, TFT_MAROON); // Frequency window.
+  sprite.drawRoundRect(5, 89, 310, 51, 6, Black);
+  sprite.drawRoundRect(4, 90, 312, 51, 6, Black);
   sprite.setTextDatum(2);
   sprite.setTextColor(back, TFT_MAROON);
   sprite.drawString(Frequency, 309, 95);
   sprite.setFreeFont(&middle1);
-  sprite.drawString("Hz ", 316, 67);
+  sprite.drawString("Hz ", 316, 57);
+  sprite.drawRect(285, 56, 31, 25, Black);
+  sprite.drawRect(284, 57, 33, 25, Black);
   sprite.setTextColor(Dark_Blue, back);
   sprite.setFreeFont(&middle2);
   sprite.drawNumber(squelch, 314, 10);
@@ -155,38 +166,30 @@ void draw()
   sprite.setFreeFont(&middle);
   sprite.setTextColor(back, Black);
   sprite.drawString(Squelch_, 170, 6);
-  sprite.drawString(Volume_, 170, 26);
+  sprite.drawString(" VOL  ", 170, 26);  // " VOL  "   Volume_
   sprite.drawString("STEP ", 35, 6);
   sprite.setFreeFont(&middle1);
   sprite.setTextColor(Black, back);
-  sprite.drawString("LSB ", 6, 62);
-
-  //sprite.drawString(SQLCH, 5, 85);
+  sprite.drawString(Modulation, 6, 62);
 
   // Memo LEDs
   sprite.setTextColor(back, Dark_Green);
-  sprite.fillRoundRect(63, 54, 214, 30, 6, Dark_Green);
-  sprite.drawRoundRect(63, 54, 214, 30, 6, Dark_Green);
-  sprite.drawString("Memories", 68, 58);
-  sprite.fillCircle(204, 68, 8, Black);
-  sprite.fillCircle(204, 68, 5, memo1);
-  sprite.fillCircle(233, 68, 8, Black);
-  sprite.fillCircle(233, 68, 5, memo2);
-  sprite.fillCircle(262, 68, 8, Black);
-  sprite.fillCircle(262, 68, 5, memo3);
+  sprite.fillRoundRect(5, 54, 156, 30, 6, Dark_Green);
+  sprite.drawRoundRect(5, 54, 155, 31, 6, Black);
+  sprite.drawRoundRect(4, 55, 157, 31, 6, Black);
+  sprite.drawString("Memories", 25, 58);
+  sprite.fillCircle(184, 68, 8, Black);
+  sprite.fillCircle(184, 68, 5, memo1);
+  sprite.fillCircle(220, 68, 8, Black);
+  sprite.fillCircle(220, 68, 5, memo2);
+  sprite.fillCircle(256, 68, 8, Black);
+  sprite.fillCircle(256, 68, 5, memo3);
 
   //Connected LED
   sprite.fillCircle(15, 13, 8, Black);
   sprite.fillCircle(15, 13, 5, connected);
 
-  sprite.setTextColor(Black, back);
-
-  //sprite.drawString("Memories", 95, 59);
-  //sprite.drawString("Mem2", 95, 55);
-  //sprite.drawString("Mem3", 185, 55);
-
-  //sprite.setFreeFont(&middle1);
-  
+  sprite.setTextColor(Black, back);  
   sprite.setFreeFont(&middle);
   sprite.drawString(Step_, 35, 26); // Step
 
@@ -200,9 +203,6 @@ void draw()
   sprite.fillRect(165, 1, 154, 4, TFT_MAROON);  // squelch Box Top Line
   sprite.fillRect(315, 1, 4, 46, TFT_MAROON);   // squelch Box Right Line
 
-  //sprite.fillRoundRect(5, 89, 312, 50, 6, TFT_MAROON);
-  // for(int i=0;i<0;i++)
-  // sprite.fillRect(6+(i*8),26,6,5,color2);
   sprite.setFreeFont(&small);
   sprite.setTextDatum(4);
   int temp = pot;              // Needs to be reviewd
@@ -391,7 +391,7 @@ void step()
   //dispStep_ = Step; 
 }
 
-void Show_frequency()
+void Show_frequency() // Might be able to combine this with the askForFrequency()
 {
   strcpy(Freq_Hz, ultoa(counter, Received_Freq));
   Frequency = Freq_Hz;
@@ -410,6 +410,7 @@ void singleClick_Encoder()
 void doubleClick_Encoder()
 {
   askForFrequency();
+  Modulation = askForModulation();
   if (memo1 == LED_Red){
     memo1 = LED_Blue;
   }
@@ -440,9 +441,11 @@ void singleClick1()
 {
   if (Memo1_counter != 0){
     counter = Memo1_counter;
+    Modulation = Memo1_Modulation;
     memo1 = LED_Red;
     ToSentFrequncyFlag = true;
     Serial_Flush_TX("SQ0" + Memo1_SQLCH + ";");
+    Serial_Flush_TX("MD" + Memo1_modulationNumber + ";");
   }  
   if (memo2 == LED_Red){
     memo2 = LED_Blue;  
@@ -463,6 +466,8 @@ void pressStart1()
   Memo1_counter = counter;
   memo1 = LED_Blue;
   Memo1_SQLCH = askSquelch();
+  Memo1_Modulation = Modulation;
+  Memo1_modulationNumber = String(modulationNumber);
 }
 
 void pressStop1()
@@ -479,9 +484,11 @@ void singleClick2()
 {
   if (Memo2_counter != 0){
     counter = Memo2_counter;
+    Modulation = Memo2_Modulation;
     memo2 = LED_Red;
     ToSentFrequncyFlag = true;
     Serial_Flush_TX("SQ0" + Memo2_SQLCH + ";");
+    Serial_Flush_TX("MD" + Memo2_modulationNumber + ";");
   }
   if (memo1 == LED_Red){
     memo1 = LED_Blue;  
@@ -502,6 +509,8 @@ void pressStart2()
   Memo2_counter = counter;
   memo2 = LED_Blue;
   Memo2_SQLCH = askSquelch();
+  Memo2_Modulation = Modulation;
+  Memo2_modulationNumber = String(modulationNumber);
 }
 
 void pressStop2()
@@ -518,9 +527,11 @@ void singleClick3()
 {
   if (Memo3_counter != 0){
     counter = Memo3_counter;
+    Modulation = Memo3_Modulation;
     memo3 = LED_Red;
     ToSentFrequncyFlag = true;
     Serial_Flush_TX("SQ0" + Memo3_SQLCH + ";");
+    Serial_Flush_TX("MD" + Memo3_modulationNumber + ";");
   }
   if (memo1 == LED_Red){
     memo1 = LED_Blue;  
@@ -541,6 +552,8 @@ void pressStart3()
   Memo3_counter = counter;
   memo3 = LED_Blue;
   Memo3_SQLCH = askSquelch();
+  Memo3_Modulation = Modulation;
+  Memo3_modulationNumber = String(modulationNumber);
 }
 
 void pressStop3()
@@ -649,54 +662,57 @@ String askForModulation(){
   LockEncoder = true;
   Asked = true;
   Serial.flush(); // wait until TX buffer is empty.  It will hold rthe execution if COM port is not connected
+  delay(20);
   Serial.println("MD;");
-  String Modulation = "";
+  delay(20);
+  String Modulation_ = "";
   if(Serial.available()){
+    delay(20);
     String rxresponse = Serial.readStringUntil(';');
     if (rxresponse.startsWith("MD"))
     {
-      int modumode = rxresponse.substring(2, 3).toInt();
-      switch (modumode)
+      modulationNumber = rxresponse.substring(2, 3).toInt();
+      switch (modulationNumber)
       {
       case 0:
-      Modulation = "DSB";
+      Modulation_ = "DSB";
         break;
       case 1:
-      Modulation = "LSB";
+      Modulation_ = "LSB";
         break;
       case 2:
-      Modulation = "USB";
+      Modulation_ = "USB";
         break;
       case 3:
-      Modulation = "CW";
+      Modulation_ = "CW";
         break;
       case 4:
-        Modulation = "FM";
+        Modulation_ = "FM";
         break;
       case 5:
-        Modulation = "AM";
+        Modulation_ = "AM";
         break;
       case 6:
-        Modulation = "FSK";
+        Modulation_ = "FSK";
         break;
       case 7:
-        Modulation = "CWR"; //(CW Reverse)
+        Modulation_ = "CWR"; //(CW Reverse)
         break;
       case 8:
-        Modulation = "DRM";
+        Modulation_ = "DRM";
         break;
       case 9:
-        Modulation = "FSR"; //(FSK Reverse);
+        Modulation_ = "FSR"; //(FSK Reverse);
         break;      
       default:
-        Modulation = "AM";
+        Modulation_ = "AM";
         break;
       }
       Asked = false;
       LockEncoder = false;
     }
   }
-  return Modulation;
+  return Modulation_;
 }
 
 void Serial_Flush_TX(String command)
