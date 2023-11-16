@@ -32,13 +32,15 @@ TFT_eSprite sprite = TFT_eSprite(&tft);
 #define LED_Red TFT_RED
 #define LED_Yellow TFT_YELLOW
 
-#define Squelch_ADC_Pin GPIO_NUM_1              // Used for the squelch ADC poteniometer
+// GPIO used pins //
+#define Squelch_ADC_Pin GPIO_NUM_1      // Used for the squelch ADC poteniometer
+#define Volume_ADC_Pin GPIO_NUM_17      // Used for the Volume ADC poteniometer
+
+const int P1 = GPIO_NUM_16;   // Used for the Frequncy Rotary Encoder pin A
+const int P2 = GPIO_NUM_21;   // xUsed for the Frequncy Rotary Encoder pin B
 
 #define PIN_CLK GPIO_NUM_2              // Used for the Step Rotary Encoder
 #define PIN_DT GPIO_NUM_3               // Used for the Step Rotary Encoder
-
-#define Encoder_Switch GPIO_NUM_10                      // Used for the Step Rotary Encoder Switch
-OneButton Encoder_Switch_button(Encoder_Switch, true);  // Used for the Step Rotary Encoder Switch
 
 #define Memo_button1 GPIO_NUM_11        // Used for the Memo Button1
 OneButton button1(Memo_button1, true);  // Used for the Memo Button1
@@ -46,6 +48,9 @@ OneButton button1(Memo_button1, true);  // Used for the Memo Button1
 OneButton button2(Memo_button2, true);  // Used for the Memo Button2
 #define Memo_button3 GPIO_NUM_13        // Used for the Memo Button3
 OneButton button3(Memo_button3, true);  // Used for the Memo Button3
+
+#define Encoder_Switch GPIO_NUM_10                      // Used for the Step Rotary Encoder Switch
+OneButton Encoder_Switch_button(Encoder_Switch, true);  // Used for the Step Rotary Encoder Switch
 
 int memo1 = back;
 int memo2 = back;
@@ -65,7 +70,6 @@ String Modulation = ""; //Holds the 3 leters modulation mode
 RotaryEncoder *encoder = nullptr; // A pointer to the dynamic created Step Rotary Encoder instance.
 String Frequency = "";
 String Squelch_ = " "; // To disply "SQLCH " 
-int squelch = 0;
 String Volume_ = " ";  //To display "VOLM "
 String Step_ = "Hz";  // Hz or KHz
 int dispStep_ = 1;
@@ -75,8 +79,10 @@ ICACHE_RAM_ATTR void ai0(); // Encoder Pin A //interupt rotine
 // ICACHE_RAM_ATTR void ai1(); //Encoder Pin B //interupt rotine
 ICACHE_RAM_ATTR void Ask_Switch_Check(); // Ask frequence switch interupt rotine
 
-volatile int Analog_Reading, Filtered_Analog_Reading, Temp_squelch= 0; // Used for the annalog input Squelch potentiometer
-volatile float average_Analog_Reading = 0; // Used for the annalog input Squelch potentiometer
+volatile int Sql_Analog_Reading, Sql_Filtered_Analog_Reading, squelch, Temp_squelch = 0;  // Used for the annalog input Volume potentiometer
+volatile int Vol_Analog_Reading, Vol_Filtered_Analog_Reading, volume, Temp_volume = 0;     // Used for the annalog input Volume potentiometer
+int squelch_volume = 0;
+
 volatile long counter = 0;
 volatile long Memo1_counter = 0;
 volatile long Memo2_counter = 0;
@@ -95,8 +101,6 @@ String Memo3_modulationNumber = "";
 bool LockEncoder = false;
 bool Asked = false;
 
-const int P1 = GPIO_NUM_16; //  GPIO16 -> Frequncy Rotary Encoder A
-const int P2 = GPIO_NUM_21; //  GPIO21 -> Frequncy Rotary Encoder B
 const int BAUDRATE = 57600;
 const int SERIAL_TIMEOUT = 2000;
 
@@ -138,7 +142,9 @@ void askForFrequency();
 void Send_Frequency();
 String askSquelch();
 void Read_Squelch();
+void Read_Volume();
 void Send_Squelch(String squelch_Value);
+void Send_Volume(String volume_Value);
 String askForModulation();
 void Serial_Flush_TX(String command);
 
@@ -160,13 +166,13 @@ void draw()
   sprite.drawRect(284, 57, 33, 25, Black);
   sprite.setTextColor(Dark_Blue, back);
   sprite.setFreeFont(&middle2);
-  sprite.drawNumber(squelch, 314, 10);
+  sprite.drawNumber(squelch_volume, 314, 10);
   sprite.drawNumber(dispStep_, 160, 10);
   sprite.setTextDatum(0);
   sprite.setFreeFont(&middle);
   sprite.setTextColor(back, Black);
   sprite.drawString(Squelch_, 170, 6);
-  sprite.drawString(" VOL  ", 170, 26);  // " VOL  "   Volume_
+  sprite.drawString(Volume_, 170, 26);  // " VOL  "   Volume_
   sprite.drawString("STEP ", 35, 6);
   sprite.setFreeFont(&middle1);
   sprite.setTextColor(Black, back);
@@ -236,6 +242,7 @@ void initGpio()
   
   //Used for the Squelch potenciometer.
   analogSetPinAttenuation(Squelch_ADC_Pin, ADC_11db);
+  analogSetPinAttenuation(Volume_ADC_Pin, ADC_11db);
 
   // Used for the Frequency Rotary Encoder
   pinMode(P1, INPUT_PULLUP);
@@ -356,8 +363,6 @@ void step()
   if (pos != newPos)
   {
     pos = newPos;
-    Volume_ = " VOL  ";
-    Squelch_ = "";
     if (newPos <= 0)
     {
       newPos = 1;
@@ -633,19 +638,39 @@ void Read_Squelch()
       average = average + analogRead(Squelch_ADC_Pin);
     }
     average = average/10;    
-    Analog_Reading = (Analog_Reading * (12-1) + average) / 12; // average_Analog_Reading += 0.1 * (Analog_Reading - average_Analog_Reading); // one pole digital filter, about 20Hz cutoff
-    Filtered_Analog_Reading = (Analog_Reading - 250) / 10;   // Used to adjust the minimum value = 1
-    squelch = map(Filtered_Analog_Reading, -25, 800, 1, 255);
+    Sql_Analog_Reading = (Sql_Analog_Reading * (12-1) + average) / 12; // average_Analog_Reading += 0.1 * (Analog_Reading - average_Analog_Reading); // one pole digital filter, about 20Hz cutoff
+    Sql_Filtered_Analog_Reading = (Sql_Analog_Reading - 250) / 10;  // Used to adjust the minimum value = 1
+    squelch = map(Sql_Filtered_Analog_Reading, 10, 710, 255, 1); //Using 0 to 3.3 vots
     if (squelch != Temp_squelch)
     {
       Volume_ = "";
       Squelch_ = "SQLCH ";
+      squelch_volume = squelch;
       Send_Squelch(String(squelch));
       Temp_squelch = squelch;
     }
   }
 }
 
+void Read_Volume()
+{
+    int average = 0;
+    for (int i=0; i < 20; i++) {
+      average = average + analogRead(Volume_ADC_Pin);
+    }
+    average = average/10;    
+    Vol_Analog_Reading = (Vol_Analog_Reading * (12-1) + average) / 12; // average_Vol_Analog_Reading += 0.1 * (Vol_Analog_Reading - average_Vol_Analog_Reading); // one pole digital filter, about 20Hz cutoff
+    Vol_Filtered_Analog_Reading = (Vol_Analog_Reading - 250) / 10;   // Used to adjust the minimum value = 1
+    volume = map(Vol_Filtered_Analog_Reading, 10, 710, 255, 1);
+    if (volume != Temp_volume )
+    {
+      Volume_ = " VOL  ";
+      Squelch_ = "";
+      squelch_volume = volume;
+      Send_Volume(String(volume));
+      Temp_volume  = volume;
+    }
+}
 void Send_Squelch(String squelch_Value){
   int IntValue = squelch_Value.toInt();
   // the if conditions are needed to add leading zeros to the Squelch value (3 digits)
@@ -656,6 +681,18 @@ void Send_Squelch(String squelch_Value){
     squelch_Value = "00" + squelch_Value;
   }
   Serial_Flush_TX("SQ0" + squelch_Value + ";");
+}
+
+void Send_Volume(String volume_Value){
+  int IntValue = volume_Value.toInt();
+  // the if conditions are needed to add leading zeros to the Squelch value (3 digits)
+  if (IntValue >= 10 && IntValue < 100) {
+    volume_Value = "0" + volume_Value;
+  }
+  if (IntValue < 10) {
+    volume_Value = "00" + volume_Value;
+  }
+  //Serial_Flush_TX("SQ0" + volume_Value + ";");
 }
 
 String askForModulation(){
@@ -739,7 +776,8 @@ void setup()
 
 void loop()
 {
-  Read_Squelch();  // Need to be in the loop, because no interrupt is configured fo the ADC reading,
+  Read_Squelch();  // ADC needs to be in the loop, because no interrupt is configured fo the ADC reading,
+  Read_Volume();
   draw();
   Encoder_Switch_button.tick();
   button1.tick();
