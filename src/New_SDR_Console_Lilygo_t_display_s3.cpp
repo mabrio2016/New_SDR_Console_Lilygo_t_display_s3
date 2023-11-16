@@ -638,9 +638,9 @@ void Read_Squelch()
       average = average + analogRead(Squelch_ADC_Pin);
     }
     average = average/10;    
-    Sql_Analog_Reading = (Sql_Analog_Reading * (12-1) + average) / 12; // average_Analog_Reading += 0.1 * (Analog_Reading - average_Analog_Reading); // one pole digital filter, about 20Hz cutoff
+    Sql_Analog_Reading = (Sql_Analog_Reading * (10-1) + average) / 10; // average_Analog_Reading += 0.1 * (Analog_Reading - average_Analog_Reading); // one pole digital filter, about 20Hz cutoff
     Sql_Filtered_Analog_Reading = (Sql_Analog_Reading - 250) / 10;  // Used to adjust the minimum value = 1
-    squelch = map(Sql_Filtered_Analog_Reading, 10, 710, 255, 1); //Using 0 to 3.3 vots
+    squelch = map(Sql_Filtered_Analog_Reading, 15, 705, 255, 0); //Using 0 to 3.3 vots
     if (squelch != Temp_squelch)
     {
       Volume_ = "";
@@ -659,9 +659,9 @@ void Read_Volume()
       average = average + analogRead(Volume_ADC_Pin);
     }
     average = average/10;    
-    Vol_Analog_Reading = (Vol_Analog_Reading * (12-1) + average) / 12; // average_Vol_Analog_Reading += 0.1 * (Vol_Analog_Reading - average_Vol_Analog_Reading); // one pole digital filter, about 20Hz cutoff
-    Vol_Filtered_Analog_Reading = (Vol_Analog_Reading - 250) / 10;   // Used to adjust the minimum value = 1
-    volume = map(Vol_Filtered_Analog_Reading, 10, 710, 255, 1);
+    Vol_Analog_Reading = (Vol_Analog_Reading * (5-1) + average) / 5; // average_Vol_Analog_Reading += 0.1 * (Vol_Analog_Reading - average_Vol_Analog_Reading); // one pole digital filter, about 20Hz cutoff
+    Vol_Filtered_Analog_Reading = (Vol_Analog_Reading - 210) / 10;   // Used to adjust the minimum value = 1
+    volume = map(Vol_Filtered_Analog_Reading, 15, 705, 255, 0);
     if (volume != Temp_volume )
     {
       Volume_ = " VOL  ";
@@ -692,7 +692,7 @@ void Send_Volume(String volume_Value){
   if (IntValue < 10) {
     volume_Value = "00" + volume_Value;
   }
-  //Serial_Flush_TX("SQ0" + volume_Value + ";");
+  Serial_Flush_TX("AG0" + volume_Value + ";");
 }
 
 String askForModulation(){
