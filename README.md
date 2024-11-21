@@ -10,3 +10,9 @@ This is the external hardware CAT controll Console.
 
 Hardware CAT controll Console working connected to the SDRUno application
 ![image](https://github.com/user-attachments/assets/7ce8fd7e-a667-4096-80c8-a23948b7bc9f)
+
+![image](https://github.com/user-attachments/assets/5f73a1b4-a985-4daf-b769-13e7a07786d4)
+
+![image](https://github.com/user-attachments/assets/935b7199-df7a-45a4-909d-9b0718bd3ba2)
+
+![image](https://github.com/user-attachments/assets/c03cfea1-cb59-4644-845a-9798b298417a)
